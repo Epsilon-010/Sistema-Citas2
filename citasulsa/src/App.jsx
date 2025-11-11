@@ -6,7 +6,7 @@ import {
 } from "react-router-dom";
 import { useState } from "react";
 import Login from "./components/login";
-import Bienvda from "./components/Bienvda";
+import BienvdaRouter from "./components/bienvda/BienvdaRouter";
 import Agregar from "./components/Agregar";
 import Consultar from "./components/Consultar";
 import Reagendar from "./components/Reagendar";
@@ -60,12 +60,14 @@ const App = () => {
             <RutaProtegida
               rolesPermitidos={[
                 "admin_sistema",
+                "admin_escuela",
                 "admin_universitario",
                 "guardia",
+                "vigilancia",
               ]}
             >
               <PageLayout>
-                <Bienvda />
+                <BienvdaRouter />
               </PageLayout>
             </RutaProtegida>
           }
@@ -75,7 +77,7 @@ const App = () => {
           path="/agregar"
           element={
             <RutaProtegida
-              rolesPermitidos={["admin_sistema", "admin_universitario"]}
+              rolesPermitidos={["admin_sistema", "admin_escuela", "admin_universitario"]}
             >
               <PageLayout>
                 <Agregar
@@ -93,8 +95,10 @@ const App = () => {
             <RutaProtegida
               rolesPermitidos={[
                 "admin_sistema",
+                "admin_escuela",
                 "admin_universitario",
                 "guardia",
+                "vigilancia",
               ]}
             >
               <PageLayout>
@@ -111,7 +115,7 @@ const App = () => {
           path="/reagendar"
           element={
             <RutaProtegida
-              rolesPermitidos={["admin_sistema", "admin_universitario"]}
+              rolesPermitidos={["admin_sistema", "admin_escuela", "admin_universitario"]}
             >
               <PageLayout>
                 <Reagendar />

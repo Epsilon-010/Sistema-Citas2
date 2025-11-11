@@ -10,6 +10,7 @@ from uuid import UUID
 from .email_servicios import EmailService
 from ...auth.auth import get_password_hash
 from dotenv import load_dotenv
+from fastapi import HTTPException
 
 load_dotenv()
 
@@ -18,9 +19,21 @@ class UsuarioServicios:
     def __init__(self,async_session_maker = AsyncSessionLocal):
         self._async_session_maker = async_session_maker
     
-    async def get_citas(self):
+    async def get_citas(self, usuario_id: UUID = None, rol: str = None):
         async with self._async_session_maker() as session:
-            results = await session.execute(select(CitasORM).options(selectinload(CitasORM.visitante),selectinload(CitasORM.carro)))
+            query = select(CitasORM).options(
+                selectinload(CitasORM.visitante),
+                selectinload(CitasORM.carro),
+                selectinload(CitasORM.usuario_visitado)
+            )
+            
+            # Si es admin_escuela, solo mostrar sus citas creadas
+            if rol == "admin_escuela" and usuario_id:
+                query = query.where(CitasORM.Creado_Por == usuario_id)
+            
+            # admin_sistema y vigilancia ven todas las citas
+            
+            results = await session.execute(query)
             citas = results.scalars().all()
             return citas
     
@@ -108,51 +121,113 @@ class UsuarioServicios:
 
 
 
-    async def create_cita(self, nombre_usuario:str, apellido_paterno_usuario:str, apellido_materno_usuario:str,
+    async def create_cita(self, nombre_persona_visitada:str,
                       nombre_visitante:str, apellido_paterno_visitante:str, apellido_materno_visitante:str,
-                      placas:str, fecha:date, hora:time):
+                      placas:str, fecha:date, hora:time, area:str, creado_por:UUID):
         async with self._async_session_maker() as session:
-            usuario = await self.get_usuario_by_nombre(nombre_usuario, apellido_paterno_usuario, apellido_materno_usuario)
-            visitante = await self.get_visitante_by_nombre(nombre_visitante, apellido_paterno_visitante, apellido_materno_visitante)
+            # El nombre de la persona visitada ahora es texto libre, no requiere búsqueda
+            # Solo guardamos el texto si se proporcionó
+            nombre_persona = None
+            if nombre_persona_visitada and nombre_persona_visitada.strip():
+                nombre_persona = nombre_persona_visitada.strip()
 
-            if not usuario or not visitante:
-                raise ValueError("Usuario o visitante no guardado")
+            # Buscar visitante (obligatorio)
+            filtrosVisitante = []
+            if nombre_visitante:
+                filtrosVisitante.append(VisitanteORM.Nombre == nombre_visitante)
+            if apellido_paterno_visitante:
+                filtrosVisitante.append(VisitanteORM.Apellido_Paterno == apellido_paterno_visitante)
+            if apellido_materno_visitante:
+                filtrosVisitante.append(VisitanteORM.Apellido_Materno == apellido_materno_visitante)
+            
+            result_visitante = await session.execute(select(VisitanteORM).where(*filtrosVisitante))
+            visitante = result_visitante.scalars().first()
+
+            if not visitante:
+                raise ValueError(f"Visitante no encontrado: {nombre_visitante} {apellido_paterno_visitante} {apellido_materno_visitante}. Debe crearse primero antes de agendar la cita.")
         
             carro = None
-            if placas:
+            # Solo buscar el carro si hay placas válidas
+            if placas and placas.strip():
                 result = await session.execute(select(CarroORM).where(CarroORM.Placas == placas))
                 carro = result.scalars().first()
         
             new_cita = CitasORM(
                 Visitante_Id = visitante.Id,
-                Usuario_Visitado = usuario.Id,
+                Usuario_Visitado = None,  # Ya no usamos esta relación
+                Nombre_Persona_Visitada = nombre_persona,  # Guardamos el texto libre
                 Carro_Id = carro.Id if carro else None,
+                Creado_Por = creado_por,
                 Fecha = fecha,
-                Hora = hora
+                Hora = hora,
+                Area = area
             )
             session.add(new_cita)
             await session.commit()
             await session.refresh(new_cita)
         
-        
-            email_service = EmailService()
-            nombre_completo_usuario = f"{usuario.Nombre} {usuario.Apellido_Paterno} {usuario.Apellido_Materno}"
-        
-            await email_service.send_confirmation_email(
-                destinatario_email=visitante.Correo,
-                nombre_visitante=visitante.Nombre,
-                apellido_paterno=visitante.Apellido_Paterno,
-                apellido_materno=visitante.Apellido_Materno,
-                nombre_usuario=nombre_completo_usuario,
-                fecha=fecha,
-                hora=hora,
-                placas=placas
+            # Enviar email de confirmación (opcional, no debe bloquear la cita)
+            try:
+                email_service = EmailService()
+                
+                # Usar el nombre de la persona visitada o el área
+                nombre_completo_usuario = nombre_persona if nombre_persona else f"Área de {area}"
+            
+                await email_service.send_confirmation_email(
+                    destinatario_email=visitante.Correo,
+                    nombre_visitante=visitante.Nombre,
+                    apellido_paterno=visitante.Apellido_Paterno,
+                    apellido_materno=visitante.Apellido_Materno,
+                    nombre_usuario=nombre_completo_usuario,
+                    fecha=fecha,
+                    hora=hora,
+                    placas=placas
                 )
+            except Exception as e:
+                # Solo logear el error, no fallar la creación de la cita
+                print(f"Error al enviar email de confirmación: {str(e)}")
+                # La cita ya fue creada exitosamente
     
-    async def update_cita_by_id(self,id:UUID,fecha:date=None,hora:time=None):
+    async def verificar_permiso_cita(self, cita_id: UUID, usuario_id: UUID, rol: str):
+        """Verifica si el usuario tiene permiso para modificar/eliminar una cita"""
+        async with self._async_session_maker() as session:
+            result = await session.execute(select(CitasORM).where(CitasORM.Id == cita_id))
+            cita = result.scalars().first()
+            
+            if not cita:
+                raise ValueError("Cita no encontrada")
+            
+            # admin_sistema tiene acceso total
+            if rol == "admin_sistema":
+                return True
+            
+            # admin_escuela solo puede modificar sus propias citas
+            if rol == "admin_escuela":
+                if cita.Creado_Por == usuario_id:
+                    return True
+                else:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="No tienes permiso para modificar esta cita. Solo puedes modificar las citas que tú creaste."
+                    )
+            
+            # vigilancia no puede modificar ninguna cita
+            raise HTTPException(
+                status_code=403,
+                detail="Tu rol no tiene permisos para modificar citas."
+            )
+    
+    async def update_cita_by_id(self,id:UUID,fecha:date=None,hora:time=None,usuario_id:UUID=None,rol:str=None):
+        # Verificar permisos si se proporciona usuario y rol
+        if usuario_id and rol:
+            await self.verificar_permiso_cita(id, usuario_id, rol)
+        
         async with self._async_session_maker() as session: 
             result = await session.execute(select(CitasORM).where(CitasORM.Id == id))
             update_cita = result.scalars().first()
+
+            if not update_cita:
+                raise ValueError("Cita no encontrada")
 
             if fecha:
                 update_cita.Fecha = fecha
@@ -161,10 +236,18 @@ class UsuarioServicios:
             await session.commit()
             await session.refresh(update_cita)
     
-    async def delete_cita_by_id(self,id:UUID):
+    async def delete_cita_by_id(self,id:UUID,usuario_id:UUID=None,rol:str=None):
+        # Verificar permisos si se proporciona usuario y rol
+        if usuario_id and rol:
+            await self.verificar_permiso_cita(id, usuario_id, rol)
+        
         async with self._async_session_maker() as session:
             result = await session.execute(select(CitasORM).where(CitasORM.Id == id))
             delete_cita = result.scalars().first()
+            
+            if not delete_cita:
+                raise ValueError("Cita no encontrada")
+            
             await session.delete(delete_cita)
             await session.commit()
     
@@ -183,13 +266,14 @@ class UsuarioServicios:
         ):
         async with self._async_session_maker() as session:
             try:
-                
+                # Hashear la contraseña antes de guardar
+                hashed_password = get_password_hash(password)
             
                 new_user = UsuarioORM(
                     Nombre=nombre,
                     Apellido_Paterno=apellido_paterno,
                     Apellido_Materno=apellido_materno,
-                    Password=password,
+                    Password=hashed_password,
                     Email=email,
                     Rol=rol,
                     Rol_Escuela=rol_escuela,
@@ -243,7 +327,8 @@ class UsuarioServicios:
                 if apellido_materno:
                     update_user.Apellido_Materno = apellido_materno
                 if password:
-                    update_user.Password = password
+                    # Hashear la contraseña antes de actualizar
+                    update_user.Password = get_password_hash(password)
                 if email:
                     update_user.Email = email
                 if rol:
@@ -264,6 +349,30 @@ class UsuarioServicios:
 
     async def create_visitante(self,nombre:str,genero:str,apellido_paterno:str,apellido_materno:str,fecha_nacimiento:date,ine:str,correo:str,numero:str,ingreso:str):
         async with self._async_session_maker() as session:
+            # Verificar si el visitante ya existe por INE (identificación única)
+            # El INE es único - cada persona tiene solo un INE
+            # El correo y número NO son únicos - pueden repetirse entre diferentes personas
+            if ine and ine.strip():
+                # Buscar primero solo por INE
+                result = await session.execute(
+                    select(VisitanteORM).where(VisitanteORM.Ine == ine)
+                )
+                existing_visitante = result.scalars().first()
+                
+                if existing_visitante:
+                    # Verificar si es la misma persona (mismo INE + mismo nombre)
+                    if (existing_visitante.Nombre == nombre and 
+                        existing_visitante.Apellido_Paterno == apellido_paterno):
+                        # Es la misma persona, reutilizar el registro
+                        return existing_visitante
+                    else:
+                        # Es un INE duplicado con nombre diferente - ERROR
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"El INE {ine} ya está registrado para otra persona ({existing_visitante.Nombre} {existing_visitante.Apellido_Paterno}). Por favor verifica el número de INE."
+                        )
+            
+            # Si no existe, crear el nuevo visitante
             new_visitante = VisitanteORM(
                 Nombre = nombre,
                 Genero = genero,
@@ -278,6 +387,7 @@ class UsuarioServicios:
             session.add(new_visitante)
             await session.commit()
             await session.refresh(new_visitante)
+            return new_visitante
     
     async def update_visitante_by_id(self,id:UUID,nombre:str = None,genero:str = None,apellido_paterno:str= None,apellido_materno:str= None,fecha_nacimiento:date= None,
                                      ine:str= None,correo:str= None,numero:str= None,ingreso:str= None):
@@ -322,6 +432,14 @@ class UsuarioServicios:
 
     async def create_car(self,marca:str,modelo:str,color:str,placas:str):
         async with self._async_session_maker() as session:
+            # Verificar si el carro ya existe por placas
+            result = await session.execute(select(CarroORM).where(CarroORM.Placas == placas))
+            existing_car = result.scalars().first()
+            if existing_car:
+                # Si ya existe, no lo creamos de nuevo, simplemente retornamos
+                return existing_car
+            
+            # Si no existe, crear el nuevo carro
             new_car = CarroORM(
                 Marca = marca,
                 Modelo = modelo,
@@ -332,6 +450,7 @@ class UsuarioServicios:
             session.add(new_car)
             await session.commit()
             await session.refresh(new_car)
+            return new_car
     
     async def get_user_by_rol_escuela(self,rol:str):
         async with self._async_session_maker() as session:

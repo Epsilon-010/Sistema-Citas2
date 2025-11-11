@@ -19,7 +19,8 @@ class UsuarioORM(Base):
     Area= Column(String(50),nullable=False)
 
     
-    cita = relationship("CitasORM",back_populates="usuario_visitado",passive_deletes=True)
+    cita = relationship("CitasORM",back_populates="usuario_visitado",foreign_keys="CitasORM.Usuario_Visitado",passive_deletes=True)
+    citas_creadas = relationship("CitasORM",foreign_keys="CitasORM.Creado_Por",passive_deletes=True)
 
 
 

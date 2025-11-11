@@ -17,8 +17,8 @@ class VisitanteORM(Base):
     Apellido_Materno = Column(String(30),nullable=False)
     Fecha_Nacimiento = Column(Date,nullable=False)
     Ine = Column(String(10),nullable=False,unique=True,index=True)
-    Correo = Column(String(150),nullable=False,unique=True)
-    Numero = Column(String(12),nullable=False,unique=True)
+    Correo = Column(String(150),nullable=False)
+    Numero = Column(String(12),nullable=False)
     Ingreso = Column(String(15),nullable=False)
 
     cita = relationship("CitasORM",back_populates="visitante",passive_deletes=True)
