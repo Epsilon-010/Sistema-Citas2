@@ -12,18 +12,16 @@ class CarroRequestCreate(BaseModel):
     @field_validator('Marca', 'Modelo', 'Color')
     @classmethod
     def validar_atributos(cls, value: str):
-        if " " in value:
-            raise ValueError("No puede tener espacios en blanco")
-        if not value.isalpha():
-            raise ValueError("Solo deben contener letras")
+        # Permitir espacios y caracteres alfanuméricos
+        if not value.replace(" ", "").replace("-", "").isalnum():
+            raise ValueError("Solo se permiten letras, números, espacios y guiones")
         return value
 
     @field_validator('Placas')
     @classmethod
     def validar_placas(cls, value: str):
-        if " " in value:
-            raise ValueError("Las placas no pueden tener espacios en blanco")
-        return value
+        # Las placas generalmente no tienen espacios pero sí pueden tener guiones
+        return value.strip()
 
     class Config:
         allow_population_by_field_name = True

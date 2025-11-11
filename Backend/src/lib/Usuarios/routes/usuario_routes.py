@@ -6,7 +6,7 @@ from datetime import date, time
 from uuid import UUID
 from ..services.usuarios_servicios import UsuarioServicios
 from ..schemas.usuario_schema import UsuarioResponse, UsuarioRequestCreate, UsuarioRequestUpdate, UsuarioSearchByName, UsuarioResponseDetail
-from ...Citas.schemas.citas_schema import CitasRequestCreate, CitasResponse, CitasResponseDetail
+from ...Citas.schemas.citas_schema import CitasRequestCreate, CitasResponse, CitasResponseDetail, CitaResponseAdmin
 from ...Carros.schemas.carro_schema import CarroRequestCreate
 from ...Visitantes.schemas.visitantes_schemas import VisitanteRequestCreate
 from ...auth.auth import verify_access_token
@@ -40,15 +40,15 @@ async def require_role(required_roles: List[str], current_user: dict = Depends(g
 
 
 async def require_root(current_user: dict = Depends(get_current_user)):
-    return await require_role(["root"], current_user)
+    return await require_role(["admin_sistema"], current_user)
 
 
 async def require_root_or_admin(current_user: dict = Depends(get_current_user)):
-    return await require_role(["root", "admin"], current_user)
+    return await require_role(["admin_sistema", "admin_escuela"], current_user)
 
 
 async def require_any_role(current_user: dict = Depends(get_current_user)):
-    return await require_role(["root", "admin", "visitante"], current_user)
+    return await require_role(["admin_sistema", "admin_escuela", "usuario", "vigilancia"], current_user)
 
 
 @usuarios_routes.get('/usuarios', status_code=status.HTTP_200_OK, response_model=List[UsuarioResponse])
@@ -168,18 +168,22 @@ async def create_cita(cita_data: CitasRequestCreate, current_user: dict = Depend
             apellido_materno_visitante=cita_data.Apellido_Materno_Visitante,
             placas=cita_data.Placas,
             fecha=cita_data.Fecha,
-            hora=cita_data.Hora
+            hora=cita_data.Hora,
+            area=cita_data.Area,
+            creado_por=UUID(current_user.get("sub"))
         )
         return {"message": "Cita creada exitosamente"}
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@usuarios_routes.get('/citas', status_code=status.HTTP_200_OK, response_model=List[CitasResponse])
+@usuarios_routes.get('/citas', status_code=status.HTTP_200_OK, response_model=List[CitaResponseAdmin])
 async def get_citas(current_user: dict = Depends(require_any_role)):
     service = UsuarioServicios()
     try:
-        citas = await service.get_citas()
+        usuario_id = UUID(current_user.get("sub"))
+        rol = current_user.get("rol")
+        citas = await service.get_citas(usuario_id=usuario_id, rol=rol)
         return citas
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -189,24 +193,36 @@ async def get_citas(current_user: dict = Depends(require_any_role)):
 async def update_cita(id: UUID, fecha: date = None, hora: time = None, current_user: dict = Depends(require_root_or_admin)):
     service = UsuarioServicios()
     try:
+        usuario_id = UUID(current_user.get("sub"))
+        rol = current_user.get("rol")
+        
         await service.update_cita_by_id(
             id=id,
             fecha=fecha,
-            hora=hora
+            hora=hora,
+            usuario_id=usuario_id,
+            rol=rol
         )
         return {"message": "Cita actualizada exitosamente"}
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except HTTPException:
+        raise
 
 
 @usuarios_routes.delete('/citas/delete', status_code=status.HTTP_200_OK)
 async def delete_cita(id: UUID, current_user: dict = Depends(require_root_or_admin)):
     service = UsuarioServicios()
     try:
-        await service.delete_cita_by_id(id)
+        usuario_id = UUID(current_user.get("sub"))
+        rol = current_user.get("rol")
+        
+        await service.delete_cita_by_id(id, usuario_id=usuario_id, rol=rol)
         return {"message": "Cita eliminada exitosamente"}
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except HTTPException:
+        raise
 
 
 @usuarios_routes.get('/citas/detail/{id}', status_code=status.HTTP_200_OK, response_model=CitasResponseDetail)

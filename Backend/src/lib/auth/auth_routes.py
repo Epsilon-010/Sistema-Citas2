@@ -19,11 +19,20 @@ async def login(credentials: LoginRequest):
                 detail="contraseña Incorrecta"
             )
         
+        # Crear nombre completo
+        nombre_completo = f"{usuario.Nombre} {usuario.Apellido_Paterno} {usuario.Apellido_Materno}"
+        
         access_token = create_access_token(
             subject=str(usuario.Id),
             additional_claims={
                 "email": usuario.Email,
-                "rol": usuario.Rol
+                "rol": usuario.Rol,
+                "nombre": usuario.Nombre,
+                "apellido_paterno": usuario.Apellido_Paterno,
+                "apellido_materno": usuario.Apellido_Materno,
+                "nombre_completo": nombre_completo,
+                "rol_escuela": usuario.Rol_Escuela,
+                "area": usuario.Area
             }
         )
         
@@ -34,7 +43,13 @@ async def login(credentials: LoginRequest):
             "refresh_token": refresh_token,
             "token_type": "bearer",
             "rol": usuario.Rol,
-            "email": usuario.Email
+            "email": usuario.Email,
+            "nombre": usuario.Nombre,
+            "apellido_paterno": usuario.Apellido_Paterno,
+            "apellido_materno": usuario.Apellido_Materno,
+            "nombre_completo": nombre_completo,
+            "rol_escuela": usuario.Rol_Escuela,
+            "area": usuario.Area
         }
         
     except ValueError as e:

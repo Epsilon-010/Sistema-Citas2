@@ -1,25 +1,37 @@
 import { UserIcon, LockClosedIcon } from "@heroicons/react/24/outline";
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { authAPI } from "../services/api";
 
 export default function Login() {
   const navigate = useNavigate();
+  const [formData, setFormData] = useState({
+    email: "",
+    password: ""
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleLogin = () => {
-    const rol = prompt(
-      "Ingresa tu rol: admin_sistema, admin_universitario o guardia"
-    );
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    setError(""); // Limpiar error al escribir
+  };
 
-    if (
-      rol === "admin_sistema" ||
-      rol === "admin_universitario" ||
-      rol === "guardia"
-    ) {
-      localStorage.setItem("rol", rol); // guardamos el rol del usuario
-      navigate("/bienvda"); // redirige después del login
-    } else {
-      alert(
-        "Rol inválido. Intenta con admin_sistema, admin_universitario o guardia."
-      );
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await authAPI.login(formData.email, formData.password);
+      console.log("Login exitoso:", response);
+      navigate("/bienvda");
+    } catch (err) {
+      console.error("Error en login:", err);
+      setError(err.message || "Error al iniciar sesión. Verifica tus credenciales.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -42,39 +54,57 @@ export default function Login() {
             INICIAR SESIÓN
           </h2>
 
-          {/* Usuario */}
-          <div className="mb-6">
-            <label className="block text-sm mb-2">Usuario</label>
-            <div className="flex items-center bg-blue-950/60 rounded-md shadow-md px-4 py-3">
-              <UserIcon className="h-5 w-5 mr-2 text-gray-300" />
-              <input
-                type="text"
-                placeholder="Usuario"
-                className="bg-transparent outline-none w-full placeholder-gray-300"
-              />
+          <form onSubmit={handleLogin}>
+            {/* Email */}
+            <div className="mb-6">
+              <label className="block text-sm mb-2">Email</label>
+              <div className="flex items-center bg-blue-950/60 rounded-md shadow-md px-4 py-3">
+                <UserIcon className="h-5 w-5 mr-2 text-gray-300" />
+                <input
+                  type="email"
+                  name="email"
+                  placeholder="correo@ejemplo.com"
+                  value={formData.email}
+                  onChange={handleChange}
+                  required
+                  className="bg-transparent outline-none w-full placeholder-gray-300"
+                />
+              </div>
             </div>
-          </div>
 
-          {/* Contraseña */}
-          <div className="mb-8">
-            <label className="block text-sm mb-2">Contraseña</label>
-            <div className="flex items-center bg-blue-950/60 rounded-md shadow-md px-4 py-3">
-              <LockClosedIcon className="h-5 w-5 mr-2 text-gray-300" />
-              <input
-                type="password"
-                placeholder="Contraseña"
-                className="bg-transparent outline-none w-full placeholder-gray-300"
-              />
+            {/* Contraseña */}
+            <div className="mb-4">
+              <label className="block text-sm mb-2">Contraseña</label>
+              <div className="flex items-center bg-blue-950/60 rounded-md shadow-md px-4 py-3">
+                <LockClosedIcon className="h-5 w-5 mr-2 text-gray-300" />
+                <input
+                  type="password"
+                  name="password"
+                  placeholder="Contraseña"
+                  value={formData.password}
+                  onChange={handleChange}
+                  required
+                  className="bg-transparent outline-none w-full placeholder-gray-300"
+                />
+              </div>
             </div>
-          </div>
 
-          {/* Botón */}
-          <button
-            onClick={handleLogin}
-            className="bg-blue-800 hover:bg-blue-700 w-full py-2 rounded-md shadow-md font-semibold transition"
-          >
-            LOGIN
-          </button>
+            {/* Mensaje de error */}
+            {error && (
+              <div className="mb-4 text-red-300 text-sm text-center">
+                {error}
+              </div>
+            )}
+
+            {/* Botón */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="bg-blue-800 hover:bg-blue-700 w-full py-2 rounded-md shadow-md font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? "Ingresando..." : "LOGIN"}
+            </button>
+          </form>
         </div>
       </div>
     </div>

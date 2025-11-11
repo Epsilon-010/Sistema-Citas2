@@ -18,15 +18,22 @@ ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Configurar CryptContext sin verificar la versión de bcrypt
+# Esto soluciona el problema de compatibilidad con bcrypt 5.0.0+
+pwd_context = CryptContext(
+    schemes=["bcrypt"],
+    deprecated="auto",
+    bcrypt__default_rounds=12,
+    bcrypt__truncate_error=False  # Desactivar el error de truncamiento
+)
 
 
 def validate_password_strength(password: str) -> tuple[bool, str]:
     if len(password) < 8:
         return False, "La contraseña debe tener al menos 8 caracteres"
     
-    if len(password) > 72:
-        return False, "La contraseña no puede tener más de 72 caracteres"
+    # Nota: No validamos el máximo aquí porque bcrypt trunca a 72 bytes automáticamente
+    # y 72 bytes != 72 caracteres cuando hay caracteres especiales/unicode
     
     if not re.search(r"[a-z]", password):
         return False, "Debe contener al menos una minúscula"
@@ -44,21 +51,32 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    if plain_password.strip() == hashed_password.strip():
-        return True
-    else:
-        False
+    """
+    Verifica si una contraseña en texto plano coincide con el hash
+    Primero intenta verificar con bcrypt, si falla intenta comparación directa (para desarrollo)
+    """
+    try:
+        # Intentar verificar con bcrypt
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception:
+        # Fallback: comparación directa (solo para desarrollo/testing)
+        # Esto permite usar contraseñas en texto plano durante el desarrollo
+        return plain_password.strip() == hashed_password.strip()
 
 
 def get_password_hash(password: str) -> str:
+    # Truncar a 72 bytes ANTES de validar (límite de bcrypt)
+    password_bytes = password.encode("utf-8")
+    if len(password_bytes) > 72:
+        # Truncar a 72 bytes de forma segura
+        password_bytes = password_bytes[:72]
+        # Decodificar, ignorando caracteres parciales al final
+        password = password_bytes.decode("utf-8", errors="ignore")
+    
+    # Ahora validar la contraseña truncada
     is_valid, error_msg = validate_password_strength(password)
     if not is_valid:
         raise ValueError(error_msg)
-    
-    password_bytes = password.encode("utf-8")
-    if len(password_bytes) > 72:
-        password_bytes = password_bytes[:72]
-        password = password_bytes.decode("utf-8", errors="ignore")
     
     return pwd_context.hash(password)
 

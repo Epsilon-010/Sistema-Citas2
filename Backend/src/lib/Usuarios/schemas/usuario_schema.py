@@ -14,13 +14,37 @@ class UsuarioRequestCreate(BaseModel):
     Rol_Escuela:str = Field(...,max_length=30)
     Area:str = Field(...,max_length=50)
 
-    @field_validator('Nombre','Rol','Apellido_Paterno','Apellido_Materno','Rol_Escuela')
+    @field_validator('Nombre','Apellido_Paterno','Apellido_Materno')
     @classmethod
-    def validar_atributos(cls,value:str):
+    def validar_nombres(cls,value:str):
+        # Permitir letras y espacios para nombres compuestos como "Juan Carlos"
+        if not all(c.isalpha() or c.isspace() for c in value):
+            raise ValueError("Solo puede contener letras y espacios")
+        # No permitir múltiples espacios consecutivos
+        if "  " in value:
+            raise ValueError("No puede tener espacios múltiples consecutivos")
+        # No permitir espacios al inicio o final
+        if value != value.strip():
+            raise ValueError("No puede tener espacios al inicio o final")
+        return value.strip()
+    
+    @field_validator('Rol_Escuela')
+    @classmethod
+    def validar_rol_escuela(cls,value:str):
         if " " in value:
             raise ValueError("No puede tener espacios en blanco")
         if not value.isalpha():
             raise ValueError("Solo deben contener letras")
+        return value
+    
+    @field_validator('Rol')
+    @classmethod
+    def validar_rol(cls,value:str):
+        if " " in value:
+            raise ValueError("No puede tener espacios en blanco")
+        # Permitir letras y guiones bajos para roles como admin_sistema
+        if not all(c.isalpha() or c == '_' for c in value):
+            raise ValueError("Solo puede contener letras y guiones bajos")
         return value
     
     @field_validator('Password')
@@ -82,12 +106,13 @@ class UsuarioResponse(BaseModel):
     Nombre:str
     Apellido_Paterno:str
     Apellido_Materno:str
+    Area:str
 
     model_config = {"from_attributes": True}
     
 class UsuarioResponseDetail(UsuarioResponse):
     Email:EmailStr
     Rol:str
-    
+    Rol_Escuela:str
 
     model_config = {"from_attributes": True}

@@ -7,16 +7,30 @@ from ...Visitantes.schemas.visitantes_schemas import VisitanteDetailResponse,Vis
 from ...Carros.schemas.carro_schema import CarroResponse,CarroResponseDetail
 
 class CitasRequestCreate(BaseModel):
-
+    """
+    Schema para crear una cita.
+    
+    Importante: 
+    - Nombre_Usuario, Apellido_Paterno_Usuario, Apellido_Materno_Usuario: 
+      Se refiere al PERSONAL DEL SISTEMA (empleado/profesor) que será visitado.
+      Este usuario DEBE existir previamente en la tabla 'usuarios'.
+    
+    - Nombre_Visitante, Apellido_Paterno_Visitante, Apellido_Materno_Visitante:
+      Se refiere a la persona externa que hace la visita.
+      Se creará automáticamente en la tabla 'visitantes' antes de crear la cita.
+    
+    - Area: Área a la que se dirige el visitante (ejemplo: Rectoría, Sistemas, etc.)
+    """
     Nombre_Usuario:str
     Apellido_Paterno_Usuario:str
     Apellido_Materno_Usuario:str
     Nombre_Visitante:str
     Apellido_Paterno_Visitante:str
     Apellido_Materno_Visitante:str
-    Placas:str = None
+    Placas: Optional[str] = None
     Fecha:date
     Hora:time
+    Area:str
 
     
     @field_validator('Fecha')
@@ -77,6 +91,8 @@ class CitasResponseBase(BaseModel):
     Id:UUID
     Fecha: date
     Hora:time
+    Area:str
+    Creado_Por:UUID
 
     model_config = {"from_attributes": True}
 
