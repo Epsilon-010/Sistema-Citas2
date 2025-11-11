@@ -13,6 +13,7 @@ import Reagendar from "./components/Reagendar";
 import Navbar from "./components/Navbar";
 import Topbar from "./components/TopBar";
 import Admin from "./components/Admin";
+import UsuariosList from "./components/ConsultarUusarios";
 
 const App = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -130,6 +131,16 @@ const App = () => {
             <RutaProtegida rolesPermitidos={["admin_sistema"]}>
               <PageLayout>
                 <Admin />
+              </PageLayout>
+            </RutaProtegida>
+          }
+        />
+        <Route
+          path="/consultar-usuario"
+          element={
+            <RutaProtegida rolesPermitidos={["admin_sistema"]}>
+              <PageLayout>
+                <UsuariosList/>
               </PageLayout>
             </RutaProtegida>
           }

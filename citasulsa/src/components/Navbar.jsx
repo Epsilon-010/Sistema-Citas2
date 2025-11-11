@@ -49,6 +49,11 @@ export default function Navbar() {
         icon: <UserGroupIcon className="w-5 h-5 font-[Mitr]" />,
         path: "/admin",
       },
+      {
+        name: "Consultar Usuarios",
+        icon: <UserGroupIcon className="w-5 h-5 font-[Mitr]" />,
+        path: "/consultar-usuario",
+      }
     ];
   } else if (rol === "admin_universitario") {
     extraMenu = [
