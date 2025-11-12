@@ -14,6 +14,8 @@ import Navbar from "./components/Navbar";
 import Topbar from "./components/TopBar";
 import Admin from "./components/Admin";
 import UsuariosList from "./components/ConsultarUusarios";
+import ForgotPassword from "./components/ContraseniaOlvidada";
+import ResetPassword from "./components/RestablecerContrasenia";
 
 const App = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -53,6 +55,10 @@ const App = () => {
       <Routes>
         {/* Página de login */}
         <Route path="/" element={<Login />} />
+
+        <Route path="/restablecer" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+
 
         {/* Páginas accesibles según el rol */}
         <Route

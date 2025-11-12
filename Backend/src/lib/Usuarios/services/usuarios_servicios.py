@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from datetime import date,time
 from uuid import UUID
 from .email_servicios import EmailService
-from ...auth.auth import get_password_hash
+from ...auth.auth import get_password_hash,validate_password_strength
 from dotenv import load_dotenv
 from fastapi import HTTPException
 
@@ -483,6 +483,21 @@ class UsuarioServicios:
             except Exception as e:
                 # Para otros errores, usar un mensaje genérico
                 raise ValueError("Error al buscar usuario en la base de datos")
+    
+    async def reset_password_by_email(self,email:str,password:str):
+        async with self._async_session_maker() as session:
+            try:
+                result = session.execute(select(UsuarioORM).where(UsuarioORM.Email == email))
+                usuario = result.scalars().first()
+                if password:
+                    if validate_password_strength(password):
+                        usuario.Password = get_password_hash(password)
+                        session.commit()
+                        await session.refresh(usuario)
+            except ValueError:
+                raise
+
+        
 
         
 

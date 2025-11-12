@@ -155,4 +155,106 @@ class EmailService:
         except Exception as e:
             print(f"Error al enviar email: {str(e)}")
             return False
+        
+    async def send_reset_password_email(self, destinatario_email: str):
+        """
+        Envía un correo con el enlace para restablecer la contraseña.
+        """
+        try:
+            # URL de tu componente ResetPassword (frontend)
+            reset_link = f"http://localhost:5173/reset-password?email={destinatario_email}"
+
+            # Crear mensaje
+            mensaje = MIMEMultipart("alternative")
+            mensaje["Subject"] = "🔒 Restablecer tu contraseña - Sistema de Visitas"
+            mensaje["From"] = self.user
+            mensaje["To"] = destinatario_email
+
+            # HTML del correo
+            html_content = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body {{
+                        font-family: Arial, sans-serif;
+                        background-color: #f9f9f9;
+                        color: #333;
+                    }}
+                    .container {{
+                        max-width: 600px;
+                        margin: 20px auto;
+                        background: white;
+                        border-radius: 10px;
+                        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+                        overflow: hidden;
+                    }}
+                    .header {{
+                        background-color: #1e3a8a;
+                        color: white;
+                        text-align: center;
+                        padding: 20px;
+                    }}
+                    .content {{
+                        padding: 30px;
+                    }}
+                    .btn {{
+                        display: inline-block;
+                        background-color: #facc15;
+                        color: black;
+                        text-decoration: none;
+                        padding: 12px 25px;
+                        border-radius: 8px;
+                        font-weight: bold;
+                        margin-top: 20px;
+                    }}
+                    .footer {{
+                        text-align: center;
+                        font-size: 12px;
+                        color: #666;
+                        margin: 20px 0;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h2>🔒 Restablecer Contraseña</h2>
+                    </div>
+                    <div class="content">
+                        <p>Hola,</p>
+                        <p>Recibimos una solicitud para restablecer tu contraseña en el <strong>Sistema de Visitas</strong>.</p>
+                        <p>Haz clic en el siguiente botón para crear una nueva contraseña:</p>
+
+                        <div style="text-align:center;">
+                            <a href="{reset_link}" class="btn">Restablecer Contraseña</a>
+                        </div>
+
+                        <p>Si tú no solicitaste este cambio, puedes ignorar este mensaje.</p>
+
+                        <p>Este enlace te llevará a la página de restablecimiento donde podrás ingresar una nueva contraseña.</p>
+                    </div>
+                    <div class="footer">
+                        <p>Este es un correo automático, por favor no respondas.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+
+            parte_html = MIMEText(html_content, "html")
+            mensaje.attach(parte_html)
+
+            # Envío
+            with smtplib.SMTP(self.host, self.port) as server:
+                server.starttls()
+                server.login(self.user, self.password)
+                server.send_message(mensaje)
+
+            print(f"✅ Email de restablecimiento enviado a {destinatario_email}")
+            return True
+
+        except Exception as e:
+            print(f"❌ Error al enviar email de restablecimiento: {str(e)}")
+            return False
 
