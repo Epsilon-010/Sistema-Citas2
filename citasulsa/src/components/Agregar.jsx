@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { visitantesAPI, carrosAPI, citasAPI } from "../services/api";
+import { showSuccess, showError, showWarning, showLoading, closeLoading } from "../utils/alerts";
 
 export default function Agregar({ visitantes, setVisitantes }) {
   // Obtener la fecha de hoy en formato YYYY-MM-DD
@@ -157,64 +158,65 @@ export default function Agregar({ visitantes, setVisitantes }) {
 
     // Validación de campos obligatorios
     if (!formData.nombre || !formData.apellidoPaterno || !formData.fechaCita || !formData.horaCita) {
-      alert(
-        "⚠️ Por favor completa los campos obligatorios:\n• Nombre del visitante\n• Apellido paterno del visitante\n• Fecha de cita\n• Hora de cita"
+      showWarning(
+        "Por favor completa los campos obligatorios:\n• Nombre del visitante\n• Apellido paterno del visitante\n• Fecha de cita\n• Hora de cita",
+        "Campos incompletos"
       );
       return;
     }
 
     // Validar longitud mínima de nombres
     if (formData.nombre.trim().length < 2) {
-      alert("⚠️ El nombre debe tener al menos 2 caracteres");
+      showWarning("El nombre debe tener al menos 2 caracteres");
       return;
     }
     
     if (formData.apellidoPaterno.trim().length < 2) {
-      alert("⚠️ El apellido paterno debe tener al menos 2 caracteres");
+      showWarning("El apellido paterno debe tener al menos 2 caracteres");
       return;
     }
     
     if (formData.apellidoMaterno && formData.apellidoMaterno.trim().length > 0 && formData.apellidoMaterno.trim().length < 2) {
-      alert("⚠️ El apellido materno debe tener al menos 2 caracteres o dejarlo vacío");
+      showWarning("El apellido materno debe tener al menos 2 caracteres o dejarlo vacío");
       return;
     }
 
     if (!formData.area || !formData.area.trim()) {
-      alert("⚠️ Por favor selecciona el área a visitar");
+      showWarning("Por favor selecciona el área a visitar");
       return;
     }
 
     // Validación de INE: 10 dígitos exactos (obligatorio)
     if (!formData.ine || formData.ine.length !== 10) {
-      alert("⚠️ El INE es obligatorio y debe tener exactamente 10 dígitos numéricos");
+      showWarning("El INE es obligatorio y debe tener exactamente 10 dígitos numéricos", "INE inválido");
       return;
     }
 
     // Validación de celular: 10 dígitos exactos (obligatorio)
     if (!formData.celular || formData.celular.length !== 10) {
-      alert("⚠️ El número de celular es obligatorio y debe tener exactamente 10 dígitos");
+      showWarning("El número de celular es obligatorio y debe tener exactamente 10 dígitos", "Celular inválido");
       return;
     }
 
     // Validar correo electrónico (obligatorio)
     if (!formData.correo || !formData.correo.trim()) {
-      alert("⚠️ El correo electrónico es obligatorio");
+      showWarning("El correo electrónico es obligatorio");
       return;
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.correo)) {
-      alert("⚠️ Por favor ingresa un correo electrónico válido");
+      showWarning("Por favor ingresa un correo electrónico válido", "Correo inválido");
       return;
     }
     
     // Validar que el dominio del correo tenga al menos 2 caracteres después del punto
     const dominioPartes = formData.correo.split('@')[1]?.split('.');
     if (!dominioPartes || dominioPartes[dominioPartes.length - 1].length < 2) {
-      alert("⚠️ El dominio del correo electrónico no es válido");
+      showWarning("El dominio del correo electrónico no es válido", "Correo inválido");
       return;
     }
 
-    // Validar fecha de nacimiento (si se proporciona, no puede ser actual o futura)
+        // Validar fecha de nacimiento (si se proporciona, no puede ser actual o futura)
     if (formData.fechaNacimiento) {
       const hoy = new Date();
       hoy.setHours(0, 0, 0, 0);
@@ -222,7 +224,7 @@ export default function Agregar({ visitantes, setVisitantes }) {
       fechaNac.setHours(0, 0, 0, 0);
       
       if (fechaNac >= hoy) {
-        alert("⚠️ La fecha de nacimiento no puede ser hoy o una fecha futura");
+        showWarning("La fecha de nacimiento no puede ser hoy o una fecha futura", "Fecha inválida");
         return;
       }
       
@@ -230,7 +232,17 @@ export default function Agregar({ visitantes, setVisitantes }) {
       const unAnoAtras = new Date();
       unAnoAtras.setFullYear(unAnoAtras.getFullYear() - 1);
       if (fechaNac > unAnoAtras) {
-        alert("⚠️ La fecha de nacimiento indica que la persona es menor de 1 año. Por favor verifica la fecha");
+        showWarning("La fecha de nacimiento indica que la persona es menor de 1 año. Por favor verifica la fecha", "Fecha inválida");
+        return;
+      }
+
+      // Validar edad mínima de 15 años para agendar cita
+      const edad = hoy.getFullYear() - fechaNac.getFullYear() - 
+        ((hoy.getMonth() < fechaNac.getMonth() || 
+          (hoy.getMonth() === fechaNac.getMonth() && hoy.getDate() < fechaNac.getDate())) ? 1 : 0);
+      
+      if (edad < 15) {
+        showWarning(`El visitante debe tener al menos 15 años para poder agendar una cita. Edad actual: ${edad} años`, "Edad insuficiente");
         return;
       }
       
@@ -238,7 +250,7 @@ export default function Agregar({ visitantes, setVisitantes }) {
       const cientoVeinteAnosAtras = new Date();
       cientoVeinteAnosAtras.setFullYear(cientoVeinteAnosAtras.getFullYear() - 120);
       if (fechaNac < cientoVeinteAnosAtras) {
-        alert("⚠️ La fecha de nacimiento no es válida. Por favor verifica la fecha");
+        showWarning("La fecha de nacimiento no es válida. Por favor verifica la fecha", "Fecha inválida");
         return;
       }
     }
@@ -246,13 +258,49 @@ export default function Agregar({ visitantes, setVisitantes }) {
     // Validar persona a visitar si se proporciona
     if (formData.personaVisitar && formData.personaVisitar.trim().length > 0) {
       if (formData.personaVisitar.trim().length < 3) {
-        alert("⚠️ El nombre de la persona a visitar debe tener al menos 3 caracteres");
+        showWarning("El nombre de la persona a visitar debe tener al menos 3 caracteres");
+        return;
+      }
+      
+      // Validar que contenga nombre y apellido (mínimo 2 palabras)
+      const palabras = formData.personaVisitar.trim().split(/\s+/);
+      if (palabras.length < 2) {
+        showWarning("Por favor ingresa el nombre completo de la persona a visitar (nombre y apellido)");
+        return;
+      }
+    }
+
+    // Validar información de vehículo si aplica
+    if (formData.medio === "En vehículo") {
+      if (!formData.placas || !formData.placas.trim()) {
+        showWarning("Si el visitante viene en vehículo, debes ingresar las placas del mismo.");
+        return;
+      }
+      if (formData.placas.length < 5 || formData.placas.length > 12) {
+        showWarning("Las placas deben tener entre 5 y 12 caracteres", "Placas inválidas");
+        return;
+      }
+      
+      // Validar que las placas tengan al menos una letra y un número
+      const tieneLetra = /[A-Z]/.test(formData.placas);
+      const tieneNumero = /[0-9]/.test(formData.placas);
+      
+      if (!tieneLetra || !tieneNumero) {
+        showWarning("Las placas deben contener al menos una letra y un número", "Placas inválidas");
+        return;
+      }
+    }
+    
+    // Validar persona a visitar si se proporciona
+    if (formData.personaVisitar && formData.personaVisitar.trim().length > 0) {
+      if (formData.personaVisitar.trim().length < 3) {
+        showWarning("El nombre de la persona a visitar debe tener al menos 3 caracteres");
         return;
       }
       
       // Validar que tenga al menos un espacio (nombre y apellido)
       if (!formData.personaVisitar.trim().includes(' ')) {
-        alert("⚠️ Por favor ingresa el nombre completo de la persona a visitar (nombre y apellido)");
+        showWarning("Por favor ingresa el nombre completo de la persona a visitar (nombre y apellido)");
         return;
       }
     }
@@ -260,11 +308,11 @@ export default function Agregar({ visitantes, setVisitantes }) {
     // Validar que si viene en vehículo, tenga placas
     if (formData.medio === "En vehículo") {
       if (!formData.placas) {
-        alert("⚠️ Si el visitante viene en vehículo, debes ingresar las placas del mismo.");
+        showWarning("Si el visitante viene en vehículo, debes ingresar las placas del mismo.");
         return;
       }
       if (formData.placas.length < 5 || formData.placas.length > 12) {
-        alert("⚠️ Las placas deben tener entre 5 y 12 caracteres");
+        showWarning("Las placas deben tener entre 5 y 12 caracteres");
         return;
       }
       
@@ -272,7 +320,7 @@ export default function Agregar({ visitantes, setVisitantes }) {
       const tieneLetra = /[A-Z]/.test(formData.placas);
       const tieneNumero = /[0-9]/.test(formData.placas);
       if (!tieneLetra || !tieneNumero) {
-        alert("⚠️ Las placas deben contener al menos una letra y un número");
+        showWarning("Las placas deben contener al menos una letra y un número");
         return;
       }
     }
@@ -284,14 +332,17 @@ export default function Agregar({ visitantes, setVisitantes }) {
     fechaSeleccionada.setHours(0, 0, 0, 0);
     
     if (fechaSeleccionada < hoy) {
-      alert("⚠️ La fecha de la cita no puede ser anterior a hoy");
+      showWarning("La fecha de la cita no puede ser anterior a hoy", "Fecha inválida");
       return;
     }
 
     // Validar que no sea domingo
     const diaSemana = fechaSeleccionada.getDay(); // 0 = Domingo, 1 = Lunes, ..., 6 = Sábado
     if (diaSemana === 0) {
-      alert("⚠️ No se pueden agendar citas los domingos.\n\nHorario de atención:\n• Lunes a Viernes: 7:00 AM - 7:00 PM\n• Sábados: 7:00 AM - 2:00 PM");
+      showWarning(
+        "No se pueden agendar citas los domingos.\n\nHorario de atención:\n• Lunes a Viernes: 7:00 AM - 7:00 PM\n• Sábados: 7:00 AM - 2:00 PM",
+        "Domingo no disponible"
+      );
       return;
     }
 
@@ -303,13 +354,19 @@ export default function Agregar({ visitantes, setVisitantes }) {
     if (diaSemana >= 1 && diaSemana <= 5) {
       // Lunes a Viernes: 7:00 AM - 7:00 PM (07:00 - 19:00)
       if (horasCita < 7 || horasCita >= 19) {
-        alert("⚠️ Horario no disponible.\n\nLunes a Viernes:\n• Horario de atención: 7:00 AM - 7:00 PM\n\nPor favor selecciona una hora entre las 7:00 AM y las 7:00 PM");
+        showWarning(
+          "Lunes a Viernes:\n• Horario de atención: 7:00 AM - 7:00 PM\n\nPor favor selecciona una hora entre las 7:00 AM y las 7:00 PM",
+          "Horario no disponible"
+        );
         return;
       }
     } else if (diaSemana === 6) {
       // Sábado: 7:00 AM - 2:00 PM (07:00 - 14:00)
       if (horasCita < 7 || horasCita >= 14) {
-        alert("⚠️ Horario no disponible para sábado.\n\nSábados:\n• Horario de atención: 7:00 AM - 2:00 PM\n\nPor favor selecciona una hora entre las 7:00 AM y las 2:00 PM");
+        showWarning(
+          "Sábados:\n• Horario de atención: 7:00 AM - 2:00 PM\n\nPor favor selecciona una hora entre las 7:00 AM y las 2:00 PM",
+          "Horario no disponible"
+        );
         return;
       }
     }
@@ -322,17 +379,21 @@ export default function Agregar({ visitantes, setVisitantes }) {
       const minutosActualTotal = horaActual * 60 + minutoActual;
       
       if (minutosCitaTotal <= minutosActualTotal) {
-        alert(`⚠️ La hora de la cita no puede ser anterior o igual a la hora actual.\nHora actual: ${horaActual}:${minutoActual.toString().padStart(2, '0')}`);
+        showWarning(
+          `La hora de la cita no puede ser anterior o igual a la hora actual.\nHora actual: ${horaActual}:${minutoActual.toString().padStart(2, '0')}`,
+          "Hora inválida"
+        );
         return;
       }
       
       // Validar que haya al menos 30 minutos de anticipación
       if (minutosCitaTotal < minutosActualTotal + 30) {
-        alert("⚠️ Por favor agenda la cita con al menos 30 minutos de anticipación desde ahora");
+        showWarning("Por favor agenda la cita con al menos 30 minutos de anticipación desde ahora", "Anticipación requerida");
         return;
       }
     }
 
+    showLoading("Registrando cita...");
     setIsSubmitting(true);
 
     try {
@@ -387,7 +448,11 @@ export default function Agregar({ visitantes, setVisitantes }) {
       setVisitantes(nuevosVisitantes);
       localStorage.setItem("visitas", JSON.stringify(nuevosVisitantes));
 
-      alert("✅ Cita registrada correctamente en la base de datos");
+      closeLoading();
+      await showSuccess(
+        `La cita ha sido registrada exitosamente para ${formData.nombre} ${formData.apellidoPaterno}`,
+        "¡Cita registrada!"
+      );
 
       // Limpiar formulario
       setFormData({
@@ -412,51 +477,63 @@ export default function Agregar({ visitantes, setVisitantes }) {
       setVisitaPersonaEspecifica(false);
     } catch (error) {
       console.error("❌ Error al registrar la cita:", error);
+      closeLoading();
       
       // Mensajes de error más amigables
       let errorMessage = error.message;
+      let errorTitle = "Error al registrar cita";
       
+      // Error de edad mínima
+      if (errorMessage.includes("debe tener al menos 15 años")) {
+        showError(errorMessage, "Edad insuficiente");
+        return;
+      }
       // Error de personal del sistema no encontrado
-      if (errorMessage.includes("Personal del sistema no encontrado") || 
+      else if (errorMessage.includes("Personal del sistema no encontrado") || 
           errorMessage.includes("Usuario no encontrado")) {
-        errorMessage = `⚠️ Error al procesar la información de la persona a visitar. Por favor intenta de nuevo.`;
+        errorMessage = `Error al procesar la información de la persona a visitar. Por favor intenta de nuevo.`;
       }
       // Error de visitante no encontrado
       else if (errorMessage.includes("Visitante no encontrado")) {
-        errorMessage = "⚠️ Hubo un problema al crear el registro del visitante. Por favor, intenta de nuevo.";
+        errorMessage = "Hubo un problema al crear el registro del visitante. Por favor, intenta de nuevo.";
       }
       // Error de campos requeridos
       else if (errorMessage.includes("Field required")) {
-        errorMessage = "⚠️ Por favor, completa todos los campos obligatorios del formulario.";
+        errorMessage = "Por favor, completa todos los campos obligatorios del formulario.";
+        errorTitle = "Campos incompletos";
       }
       // Error de validación
       else if (errorMessage.includes("Value error")) {
         const errorDetail = errorMessage.split("Value error,")[1] || errorMessage;
         if (errorDetail.includes("INE")) {
-          errorMessage = "⚠️ El INE debe tener exactamente 10 dígitos numéricos";
+          errorMessage = "El INE debe tener exactamente 10 dígitos numéricos";
         } else if (errorDetail.includes("número telefónico")) {
-          errorMessage = "⚠️ El número de celular debe tener exactamente 10 dígitos";
+          errorMessage = "El número de celular debe tener exactamente 10 dígitos";
         } else if (errorDetail.includes("espacios")) {
-          errorMessage = `⚠️ Error de validación: Hay campos que no deben contener espacios en blanco`;
+          errorMessage = `Hay campos que no deben contener espacios en blanco`;
         } else {
-          errorMessage = `⚠️ Error de validación: ${errorDetail.trim()}`;
+          errorMessage = `${errorDetail.trim()}`;
         }
+        errorTitle = "Error de validación";
       }
       // Error de autenticación
       else if (errorMessage.includes("401") || errorMessage.includes("Unauthorized") || 
                errorMessage.includes("sesión ha expirado") || errorMessage.includes("Token expirado")) {
-        errorMessage = "🔒 Tu sesión ha expirado. Por favor, inicia sesión nuevamente.\n\nSerás redirigido al inicio de sesión en un momento...";
+        errorMessage = "Tu sesión ha expirado. Por favor, inicia sesión nuevamente.\n\nSerás redirigido al inicio de sesión en un momento...";
+        errorTitle = "Sesión expirada";
       }
       // Error de permisos
       else if (errorMessage.includes("403") || errorMessage.includes("Forbidden")) {
-        errorMessage = "⚠️ No tienes permisos para realizar esta acción.";
+        errorMessage = "No tienes permisos para realizar esta acción.";
+        errorTitle = "Acceso denegado";
       }
       // Error de conexión
       else if (errorMessage.includes("Failed to fetch") || errorMessage.includes("Network")) {
-        errorMessage = "⚠️ No se puede conectar con el servidor. Verifica que el backend esté corriendo.";
+        errorMessage = "No se puede conectar con el servidor. Verifica que el backend esté corriendo.";
+        errorTitle = "Error de conexión";
       }
       
-      alert(errorMessage);
+      showError(errorMessage, errorTitle);
     } finally {
       setIsSubmitting(false);
     }

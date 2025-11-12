@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { citasAPI } from "../services/api";
+import { showSuccess, showError, showWarning, showConfirm, showDeleteConfirm, showLoading, closeLoading, showCustomAlert } from "../utils/alerts";
 
 export default function Consultar() {
   const [visitantes, setVisitantes] = useState([]);
@@ -53,7 +54,7 @@ export default function Consultar() {
       setVisitantesFiltrados(citasFormateadas); // Mostrar todos al inicio
     } catch (error) {
       console.error("Error al cargar citas:", error);
-      alert("Error al cargar las citas. Por favor intenta de nuevo.");
+      showError("Error al cargar las citas. Por favor intenta de nuevo.");
     } finally {
       setLoading(false);
     }
@@ -104,38 +105,84 @@ export default function Consultar() {
   const handleReagendar = async () => {
     try {
       if (!selectedCita || !selectedCita.id) {
-        alert("Error: No se pudo identificar la cita");
+        showError("No se pudo identificar la cita", "Error");
         return;
       }
 
       if (!selectedDate || !selectedTime) {
-        alert("⚠️ Por favor selecciona una fecha y hora");
+        showWarning("Por favor selecciona una fecha y hora", "Campos incompletos");
         return;
       }
 
-      // Validar que la fecha no sea anterior a la fecha actual
-      const fechaSeleccionada = new Date(selectedDate);
+      // Validar fecha no anterior a hoy
       const hoy = new Date();
-      hoy.setHours(0, 0, 0, 0); // Resetear las horas para comparar solo la fecha
+      hoy.setHours(0, 0, 0, 0);
+      const fechaSeleccionada = new Date(selectedDate + 'T00:00:00');
+      fechaSeleccionada.setHours(0, 0, 0, 0);
       
       if (fechaSeleccionada < hoy) {
-        alert("⚠️ La nueva fecha no puede ser anterior a la fecha actual");
+        showWarning("La nueva fecha no puede ser anterior a hoy", "Fecha inválida");
         return;
       }
 
-      // Validar que si la fecha es hoy, la hora no sea anterior a la hora actual
-      if (fechaSeleccionada.toDateString() === hoy.toDateString()) {
-        const horaActual = new Date();
-        const [horaSeleccionada, minutosSeleccionados] = selectedTime.split(':');
-        const fechaHoraSeleccionada = new Date();
-        fechaHoraSeleccionada.setHours(parseInt(horaSeleccionada), parseInt(minutosSeleccionados), 0, 0);
-        
-        if (fechaHoraSeleccionada < horaActual) {
-          alert("⚠️ La hora seleccionada no puede ser anterior a la hora actual");
+      // Validar que no sea domingo
+      const diaSemana = fechaSeleccionada.getDay(); // 0 = Domingo, 1 = Lunes, ..., 6 = Sábado
+      if (diaSemana === 0) {
+        showWarning(
+          "No se pueden agendar citas los domingos.\n\nHorario de atención:\n• Lunes a Viernes: 7:00 AM - 7:00 PM\n• Sábados: 7:00 AM - 2:00 PM",
+          "Domingo no disponible"
+        );
+        return;
+      }
+
+      // Validar hora de la cita según el día
+      const [horasCita, minutosCita] = selectedTime.split(':').map(Number);
+      const minutosCitaTotal = horasCita * 60 + minutosCita;
+
+      // Validación de horarios laborales según el día
+      if (diaSemana >= 1 && diaSemana <= 5) {
+        // Lunes a Viernes: 7:00 AM - 7:00 PM (07:00 - 19:00)
+        if (horasCita < 7 || horasCita >= 19) {
+          showWarning(
+            "Lunes a Viernes:\n• Horario de atención: 7:00 AM - 7:00 PM\n\nPor favor selecciona una hora entre las 7:00 AM y las 7:00 PM",
+            "Horario no disponible"
+          );
+          return;
+        }
+      } else if (diaSemana === 6) {
+        // Sábado: 7:00 AM - 2:00 PM (07:00 - 14:00)
+        if (horasCita < 7 || horasCita >= 14) {
+          showWarning(
+            "Sábados:\n• Horario de atención: 7:00 AM - 2:00 PM\n\nPor favor selecciona una hora entre las 7:00 AM y las 2:00 PM",
+            "Horario no disponible"
+          );
           return;
         }
       }
 
+      // Validar hora de la cita si es para hoy
+      if (fechaSeleccionada.getTime() === hoy.getTime()) {
+        const ahora = new Date();
+        const horaActual = ahora.getHours();
+        const minutoActual = ahora.getMinutes();
+        const minutosActualTotal = horaActual * 60 + minutoActual;
+        
+        if (minutosCitaTotal <= minutosActualTotal) {
+          showWarning(
+            `La hora de la cita no puede ser anterior o igual a la hora actual.\nHora actual: ${horaActual}:${minutoActual.toString().padStart(2, '0')}`,
+            "Hora inválida"
+          );
+          return;
+        }
+        
+        // Validar que haya al menos 30 minutos de anticipación
+        if (minutosCitaTotal < minutosActualTotal + 30) {
+          showWarning("Por favor reagenda la cita con al menos 30 minutos de anticipación desde ahora", "Anticipación requerida");
+          return;
+        }
+      }
+
+      showLoading("Reagendando cita...");
       setLoading(true);
 
       // Llamar a la API para actualizar la cita
@@ -149,22 +196,27 @@ export default function Consultar() {
 
       // Cerrar modal
       setShowModal(false);
-      alert("✅ Cita reagendada correctamente");
+      closeLoading();
+      await showSuccess("La cita ha sido reagendada correctamente", "¡Cita reagendada!");
     } catch (error) {
       console.error("Error al reagendar:", error);
+      closeLoading();
       
       // Manejar errores específicos del backend
       let errorMessage = error.message || "Error desconocido";
+      let errorTitle = "Error al reagendar";
       
       if (errorMessage.includes("La fecha no puede ser anterior")) {
-        alert("⚠️ La fecha seleccionada no es válida. Debe ser igual o posterior a la fecha actual.");
+        showWarning("La fecha seleccionada no es válida. Debe ser igual o posterior a la fecha actual.", "Fecha inválida");
       } else if (errorMessage.includes("401") || errorMessage.includes("Unauthorized")) {
-        alert("🔒 Tu sesión ha expirado. Por favor, inicia sesión nuevamente.");
-        window.location.href = "/";
+        showError("Tu sesión ha expirado. Por favor, inicia sesión nuevamente.", "Sesión expirada");
+        setTimeout(() => {
+          window.location.href = "/";
+        }, 2000);
       } else if (errorMessage.includes("403") || errorMessage.includes("Forbidden")) {
-        alert("⚠️ No tienes permisos para reagendar esta cita.");
+        showError("No tienes permisos para reagendar esta cita.", "Acceso denegado");
       } else {
-        alert("❌ Error al reagendar la cita. Por favor intenta de nuevo.");
+        showError("Error al reagendar la cita. Por favor intenta de nuevo.", errorTitle);
       }
     } finally {
       setLoading(false);
@@ -173,21 +225,54 @@ export default function Consultar() {
 
   // 🔹 Eliminar cita
   const handleEliminar = async (cita) => {
-    if (!window.confirm(`¿Estás seguro de eliminar la cita de ${cita.nombre}?`)) {
+    // Confirmación personalizada que menciona la eliminación del visitante
+    const result = await showCustomAlert({
+      icon: 'warning',
+      title: '¿Eliminar cita?',
+      html: `
+        ¿Estás seguro de que deseas eliminar la cita de <strong>${cita.nombre}</strong>?<br>
+        <br>
+        <small class="text-gray-600">ℹ️ <strong>Nota:</strong> Si el visitante no tiene otras citas, su registro también será eliminado de la base de datos.</small><br>
+        <small class="text-red-600">Esta acción no se puede deshacer.</small>
+      `,
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar',
+      reverseButtons: true,
+    });
+    
+    if (!result.isConfirmed) {
       return;
     }
 
     try {
+      showLoading("Eliminando cita...");
       setLoading(true);
       await citasAPI.delete(cita.id);
       
       // Recargar las citas
       await cargarCitas();
       
-      alert("✅ Cita eliminada correctamente");
+      closeLoading();
+      await showSuccess("La cita ha sido eliminada correctamente", "¡Eliminado!");
     } catch (error) {
       console.error("Error al eliminar:", error);
-      alert("Error al eliminar la cita. Por favor intenta de nuevo.");
+      closeLoading();
+      
+      let errorMessage = error.message || "Error desconocido";
+      
+      if (errorMessage.includes("403") || errorMessage.includes("Forbidden")) {
+        showError("No tienes permisos para eliminar esta cita.", "Acceso denegado");
+      } else if (errorMessage.includes("401") || errorMessage.includes("Unauthorized")) {
+        showError("Tu sesión ha expirado. Por favor, inicia sesión nuevamente.", "Sesión expirada");
+        setTimeout(() => {
+          window.location.href = "/";
+        }, 2000);
+      } else {
+        showError("Error al eliminar la cita. Por favor intenta de nuevo.", "Error");
+      }
     } finally {
       setLoading(false);
     }
@@ -304,6 +389,16 @@ export default function Consultar() {
             <h2 className="text-lg font-semibold mb-4 text-[#1e3a8a]">
               Reagendar cita
             </h2>
+
+            {/* Información de horarios */}
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-xs font-semibold text-blue-800 mb-2">📅 Horario de atención:</p>
+              <ul className="text-xs text-blue-700 space-y-1">
+                <li>• Lunes a Viernes: 7:00 AM - 7:00 PM</li>
+                <li>• Sábados: 7:00 AM - 2:00 PM</li>
+                <li>• Domingos: Cerrado</li>
+              </ul>
+            </div>
 
             <label className="block text-sm font-medium mb-1 text-gray-700">
               Nueva fecha

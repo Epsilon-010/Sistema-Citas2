@@ -255,20 +255,49 @@ class UsuarioServicios:
             await session.commit()
             await session.refresh(update_cita)
     
-    async def delete_cita_by_id(self,id:UUID,usuario_id:UUID=None,rol:str=None):
+    async def delete_cita_by_id(self, id: UUID, usuario_id: UUID = None, rol: str = None):
         # Verificar permisos si se proporciona usuario y rol
         if usuario_id and rol:
             await self.verificar_permiso_cita(id, usuario_id, rol)
         
         async with self._async_session_maker() as session:
-            result = await session.execute(select(CitasORM).where(CitasORM.Id == id))
+            # Obtener la cita con información del visitante
+            result = await session.execute(
+                select(CitasORM).where(CitasORM.Id == id)
+            )
             delete_cita = result.scalars().first()
             
             if not delete_cita:
                 raise ValueError("Cita no encontrada")
             
+            # Guardar el ID del visitante antes de eliminar la cita
+            visitante_id = delete_cita.Visitante_Id
+            
+            # Eliminar la cita primero
             await session.delete(delete_cita)
             await session.commit()
+            
+            # Verificar si el visitante tiene otras citas
+            if visitante_id:
+                # Buscar otras citas del mismo visitante (excluyendo la que acabamos de eliminar)
+                result_otras_citas = await session.execute(
+                    select(CitasORM).where(CitasORM.Visitante_Id == visitante_id)
+                )
+                otras_citas = result_otras_citas.scalars().all()
+                
+                # Solo eliminar el visitante si no tiene otras citas
+                if not otras_citas:
+                    result_visitante = await session.execute(
+                        select(VisitanteORM).where(VisitanteORM.Id == visitante_id)
+                    )
+                    visitante = result_visitante.scalars().first()
+                    
+                    if visitante:
+                        await session.delete(visitante)
+                        await session.commit()
+                        print(f"✅ Visitante {visitante.Nombre} {visitante.Apellido_Paterno} eliminado (no tenía otras citas)")
+                else:
+                    print(f"ℹ️ Visitante conservado - tiene {len(otras_citas)} cita(s) adicional(es)")
     
 
 

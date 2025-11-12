@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { usuariosAPI } from "../services/api";
+import { showSuccess, showError, showConfirm, showLoading, closeLoading } from "../utils/alerts";
 
 export default function UsuariosList() {
   const [usuarios, setUsuarios] = useState([]);
@@ -59,7 +60,7 @@ export default function UsuariosList() {
       setMostrarDetalles(true);
     } catch (err) {
       console.error("Error al cargar detalles:", err);
-      alert(`Error: ${err.message}`);
+      showError(`Error al cargar detalles: ${err.message}`);
     }
   };
 
@@ -96,7 +97,7 @@ export default function UsuariosList() {
       setMostrarModal(true);
     } catch (err) {
       console.error("Error al cargar usuario para edición:", err);
-      alert(`Error: ${err.message}`);
+      showError(`Error al cargar usuario: ${err.message}`);
     }
   };
 
@@ -131,6 +132,8 @@ export default function UsuariosList() {
   const actualizarUsuario = async (e) => {
     e.preventDefault();
     
+    showLoading("Actualizando usuario...");
+    
     try {
       // Solo enviar campos que no estén vacíos
       const dataToSend = {};
@@ -141,26 +144,36 @@ export default function UsuariosList() {
       });
 
       await usuariosAPI.update(usuarioSeleccionado.Id, dataToSend);
-      alert("Usuario actualizado correctamente.");
+      closeLoading();
+      await showSuccess("Usuario actualizado correctamente");
       cerrarModal();
       cargarUsuarios(); // Recargar la lista
     } catch (err) {
       console.error("Error al actualizar usuario:", err);
-      alert(`No se pudo actualizar el usuario:\n${err.message}`);
+      closeLoading();
+      showError(`No se pudo actualizar el usuario: ${err.message}`);
     }
   };
 
   const eliminarUsuario = async (id) => {
-    const confirmar = window.confirm("¿Seguro que deseas eliminar este usuario?");
-    if (!confirmar) return;
+    const confirmed = await showConfirm(
+      "¿Eliminar usuario?",
+      "Esta acción no se puede deshacer. ¿Estás seguro?"
+    );
+    
+    if (!confirmed) return;
+
+    showLoading("Eliminando usuario...");
 
     try {
       await usuariosAPI.delete(id);
-      alert("Usuario eliminado correctamente.");
+      closeLoading();
+      await showSuccess("Usuario eliminado correctamente");
       cargarUsuarios(); // Recargar la lista
     } catch (err) {
       console.error("Error al eliminar usuario:", err);
-      alert(`No se pudo eliminar el usuario:\n${err.message}`);
+      closeLoading();
+      showError(`No se pudo eliminar el usuario: ${err.message}`);
     }
   };
 

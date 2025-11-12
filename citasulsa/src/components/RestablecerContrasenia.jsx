@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
+import { showSuccess, showError, showWarning, showLoading, closeLoading } from "../utils/alerts";
+import { useNavigate } from "react-router-dom";
 
 export default function ResetPassword() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmar, setConfirmar] = useState("");
@@ -17,9 +20,11 @@ export default function ResetPassword() {
     e.preventDefault();
 
     if (password !== confirmar) {
-      alert("Las contraseñas no coinciden");
+      showWarning("Las contraseñas no coinciden", "Por favor, verifica que ambas contraseñas sean iguales");
       return;
     }
+
+    showLoading("Actualizando contraseña...");
 
     try {
       console.log("📤 Enviando petición a:", `http://localhost:8000/universidad/usuarios/reset/${email}`);
@@ -45,10 +50,17 @@ export default function ResetPassword() {
 
       const data = await response.json();
       console.log("✅ Éxito:", data);
+      closeLoading();
+      await showSuccess(
+        "Contraseña actualizada",
+        "Tu contraseña ha sido cambiada exitosamente. Serás redirigido al inicio de sesión."
+      );
       setCambiada(true);
+      setTimeout(() => navigate("/"), 2000);
     } catch (error) {
       console.error("❌ Error:", error);
-      alert(`Hubo un problema al cambiar la contraseña: ${error.message}`);
+      closeLoading();
+      showError(`Hubo un problema al cambiar la contraseña: ${error.message}`);
     }
   };
 

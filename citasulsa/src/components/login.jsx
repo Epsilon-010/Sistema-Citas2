@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { authAPI } from "../services/api";
 import { Link } from "react-router-dom";
+import { showSuccess, showError, showLoading, closeLoading } from "../utils/alerts";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -24,12 +25,18 @@ export default function Login() {
     setLoading(true);
     setError("");
 
+    showLoading("Iniciando sesión...");
+
     try {
       const response = await authAPI.login(formData.email, formData.password);
       console.log("Login exitoso:", response);
+      
+      closeLoading();
+      await showSuccess("¡Inicio de sesión exitoso!", "Bienvenido al sistema");
       navigate("/bienvda");
     } catch (err) {
       console.error("Error en login:", err);
+      closeLoading();
       
       // Mensajes de error personalizados
       let errorMessage = "Error al iniciar sesión. Por favor, intenta de nuevo.";
@@ -38,25 +45,26 @@ export default function Login() {
         const msg = err.message.toLowerCase();
         
         if (msg.includes("usuario no encontrado") || msg.includes("no encontrado")) {
-          errorMessage = "❌ Usuario no encontrado. Verifica tu correo electrónico.";
+          errorMessage = "Usuario no encontrado. Verifica tu correo electrónico.";
         } else if (msg.includes("contraseña incorrecta") || msg.includes("password")) {
-          errorMessage = "❌ Contraseña incorrecta. Por favor, inténtalo de nuevo.";
+          errorMessage = "Contraseña incorrecta. Por favor, inténtalo de nuevo.";
         } else if (msg.includes("correo electrónico o contraseña incorrectos")) {
-          errorMessage = "❌ Correo electrónico o contraseña incorrectos.";
+          errorMessage = "Correo electrónico o contraseña incorrectos.";
         } else if (msg.includes("sesión ha expirado")) {
-          errorMessage = "⚠️ Tu sesión ha expirado. Por favor, inicia sesión nuevamente.";
+          errorMessage = "Tu sesión ha expirado. Por favor, inicia sesión nuevamente.";
         } else if (msg.includes("no estás autenticado")) {
-          errorMessage = "⚠️ Debes iniciar sesión para continuar.";
+          errorMessage = "Debes iniciar sesión para continuar.";
         } else if (msg.includes("error interno") || msg.includes("500")) {
-          errorMessage = "⚠️ Error del servidor. Por favor, intenta más tarde.";
+          errorMessage = "Error del servidor. Por favor, intenta más tarde.";
         } else if (msg.includes("red") || msg.includes("network") || msg.includes("fetch")) {
-          errorMessage = "⚠️ Error de conexión. Verifica tu conexión a internet.";
+          errorMessage = "Error de conexión. Verifica tu conexión a internet.";
         } else {
           // Si hay un mensaje específico del servidor, mostrarlo
-          errorMessage = `❌ ${err.message}`;
+          errorMessage = err.message;
         }
       }
       
+      showError(errorMessage);
       setError(errorMessage);
     } finally {
       setLoading(false);

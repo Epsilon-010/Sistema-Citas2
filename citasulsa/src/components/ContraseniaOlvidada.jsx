@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { showSuccess, showError, showLoading, closeLoading } from "../utils/alerts";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
@@ -6,6 +7,9 @@ export default function ForgotPassword() {
 
   const handleSubmit = async (e) => {
   e.preventDefault();
+  
+  showLoading("Enviando correo de recuperación...");
+  
   try {
     console.log("📤 Enviando petición para email:", email);
     
@@ -26,10 +30,16 @@ export default function ForgotPassword() {
     
     const data = await res.json();
     console.log("✅ Éxito:", data);
+    closeLoading();
+    await showSuccess(
+      "Correo enviado",
+      "Si el correo está registrado, recibirás un enlace para restablecer tu contraseña"
+    );
     setEnviado(true);
   } catch (error) {
     console.error("Error:", error);
-    alert(`Hubo un problema al enviar el correo: ${error.message}`);
+    closeLoading();
+    showError(`Hubo un problema al enviar el correo: ${error.message}`);
   }
 };
 
