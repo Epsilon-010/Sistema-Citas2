@@ -317,8 +317,9 @@ class UsuarioServicios:
             if not delete_cita:
                 raise ValueError("Cita no encontrada")
             
-            # Guardar el ID del visitante antes de eliminar la cita
+            # Guardar el ID del visitante y del carro antes de eliminar la cita
             visitante_id = delete_cita.Visitante_Id
+            carro_id = delete_cita.Carro_Id
             
             # Eliminar la cita primero
             await session.delete(delete_cita)
@@ -345,6 +346,28 @@ class UsuarioServicios:
                         print(f"✅ Visitante {visitante.Nombre} {visitante.Apellido_Paterno} eliminado (no tenía otras citas)")
                 else:
                     print(f"ℹ️ Visitante conservado - tiene {len(otras_citas)} cita(s) adicional(es)")
+            
+            # Verificar si el carro tiene otras citas
+            if carro_id:
+                # Buscar otras citas del mismo carro (excluyendo la que acabamos de eliminar)
+                result_otras_citas_carro = await session.execute(
+                    select(CitasORM).where(CitasORM.Carro_Id == carro_id)
+                )
+                otras_citas_carro = result_otras_citas_carro.scalars().all()
+                
+                # Solo eliminar el carro si no tiene otras citas
+                if not otras_citas_carro:
+                    result_carro = await session.execute(
+                        select(CarroORM).where(CarroORM.Id == carro_id)
+                    )
+                    carro = result_carro.scalars().first()
+                    
+                    if carro:
+                        await session.delete(carro)
+                        await session.commit()
+                        print(f"✅ Carro {carro.Marca} {carro.Modelo} (Placas: {carro.Placas}) eliminado (no tenía otras citas)")
+                else:
+                    print(f"ℹ️ Carro conservado - tiene {len(otras_citas_carro)} cita(s) adicional(es)")
     
 
 

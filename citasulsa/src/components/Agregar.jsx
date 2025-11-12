@@ -453,12 +453,6 @@ export default function Agregar({ visitantes, setVisitantes }) {
         `La cita ha sido registrada exitosamente para ${formData.nombre} ${formData.apellidoPaterno}. Recibirás un correo de confirmación.`,
         "¡Cita registrada!"
       );
-      
-      // Mostrar información de contacto
-      await showInfo(
-        "Se ha enviado una confirmación por correo electrónico. Para cualquier duda, contáctanos al: 951 458 1314",
-        "Confirmación enviada"
-      );
 
       // Limpiar formulario
       setFormData({
