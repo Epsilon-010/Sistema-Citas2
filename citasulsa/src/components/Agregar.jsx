@@ -2,6 +2,15 @@ import { useState } from "react";
 import { visitantesAPI, carrosAPI, citasAPI } from "../services/api";
 
 export default function Agregar({ visitantes, setVisitantes }) {
+  // Obtener la fecha de hoy en formato YYYY-MM-DD
+  const getFechaHoy = () => {
+    const hoy = new Date();
+    const year = hoy.getFullYear();
+    const month = String(hoy.getMonth() + 1).padStart(2, '0');
+    const day = String(hoy.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const [formData, setFormData] = useState({
     nombre: "",
     apellidoPaterno: "",
@@ -11,7 +20,7 @@ export default function Agregar({ visitantes, setVisitantes }) {
     ine: "",
     correo: "",
     celular: "",
-    fechaCita: "",
+    fechaCita: getFechaHoy(),  // Pre-seleccionar hoy por defecto
     horaCita: "",
     personaVisitar: "",  // Un solo campo de texto libre
     area: "",
@@ -23,6 +32,52 @@ export default function Agregar({ visitantes, setVisitantes }) {
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [visitaPersonaEspecifica, setVisitaPersonaEspecifica] = useState(false);
+
+  // Función para verificar si la fecha seleccionada es hoy
+  const esFechaHoy = (fecha) => {
+    if (!fecha) return false;
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const fechaSeleccionada = new Date(fecha + 'T00:00:00');
+    fechaSeleccionada.setHours(0, 0, 0, 0);
+    return fechaSeleccionada.getTime() === hoy.getTime();
+  };
+
+  // Función para obtener mensaje dinámico de hora
+  const getMensajeHora = () => {
+    if (!formData.fechaCita) {
+      return 'Selecciona primero una fecha';
+    }
+    
+    const fechaSeleccionada = new Date(formData.fechaCita + 'T00:00:00');
+    const diaSemana = fechaSeleccionada.getDay();
+    
+    // Validar si es domingo
+    if (diaSemana === 0) {
+      return '❌ No se atiende los domingos';
+    }
+    
+    // Mensaje base según el día
+    let horarioBase = '';
+    if (diaSemana >= 1 && diaSemana <= 5) {
+      horarioBase = 'Lun-Vie: 7:00 AM - 7:00 PM';
+    } else if (diaSemana === 6) {
+      horarioBase = 'Sábado: 7:00 AM - 2:00 PM';
+    }
+    
+    // Si es hoy, agregar restricción de tiempo
+    if (esFechaHoy(formData.fechaCita)) {
+      const ahora = new Date();
+      const horaMin = ahora.getHours();
+      const minMin = ahora.getMinutes() + 30;
+      const horaFinal = Math.floor(minMin / 60) + horaMin;
+      const minFinal = minMin % 60;
+      return `${horarioBase} | Hoy: después de ${horaFinal}:${minFinal.toString().padStart(2, '0')}`;
+    }
+    
+    return horarioBase;
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -43,11 +98,55 @@ export default function Agregar({ visitantes, setVisitantes }) {
     // Para placas: sin espacios, máximo 12 caracteres, alfanumérico
     if (name === 'placas') {
       processedValue = value.replace(/\s/g, '').toUpperCase().slice(0, 12);
+      // Solo permitir letras y números en placas
+      processedValue = processedValue.replace(/[^A-Z0-9]/g, '');
     }
     
-    // Para nombres: solo letras y espacios
+    // Para nombres: solo letras, espacios y tildes (sin números ni caracteres especiales)
     if (['nombre', 'apellidoPaterno', 'apellidoMaterno', 'personaVisitar'].includes(name)) {
       processedValue = value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/g, '');
+      // Limitar espacios consecutivos
+      processedValue = processedValue.replace(/\s+/g, ' ');
+      // No permitir espacios al inicio
+      if (processedValue.startsWith(' ')) {
+        processedValue = processedValue.trimStart();
+      }
+    }
+    
+    // Para marca, modelo y color del vehículo
+    if (['marca', 'modelo', 'color'].includes(name)) {
+      processedValue = value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ0-9\s\-]/g, '');
+      processedValue = processedValue.replace(/\s+/g, ' ');
+      if (processedValue.startsWith(' ')) {
+        processedValue = processedValue.trimStart();
+      }
+    }
+    
+    // Para correo: no permitir espacios
+    if (name === 'correo') {
+      processedValue = value.replace(/\s/g, '').toLowerCase();
+    }
+    
+    // Validación especial para hora si la fecha es hoy
+    if (name === 'horaCita' && formData.fechaCita) {
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+      const fechaSeleccionada = new Date(formData.fechaCita + 'T00:00:00');
+      fechaSeleccionada.setHours(0, 0, 0, 0);
+      
+      // Si es hoy, validar que la hora sea futura
+      if (fechaSeleccionada.getTime() === hoy.getTime() && value) {
+        const ahora = new Date();
+        const [horasCita, minutosCita] = value.split(':').map(Number);
+        const minutosCitaTotal = horasCita * 60 + minutosCita;
+        const minutosActualTotal = ahora.getHours() * 60 + ahora.getMinutes();
+        
+        // Advertencia visual si la hora es muy cercana o pasada
+        if (minutosCitaTotal <= minutosActualTotal + 30) {
+          // Solo mostrar advertencia, pero permitir que el usuario escriba
+          console.warn('La hora debe ser al menos 30 minutos en el futuro');
+        }
+      }
     }
     
     setFormData({ ...formData, [name]: processedValue });
@@ -64,28 +163,96 @@ export default function Agregar({ visitantes, setVisitantes }) {
       return;
     }
 
+    // Validar longitud mínima de nombres
+    if (formData.nombre.trim().length < 2) {
+      alert("⚠️ El nombre debe tener al menos 2 caracteres");
+      return;
+    }
+    
+    if (formData.apellidoPaterno.trim().length < 2) {
+      alert("⚠️ El apellido paterno debe tener al menos 2 caracteres");
+      return;
+    }
+    
+    if (formData.apellidoMaterno && formData.apellidoMaterno.trim().length > 0 && formData.apellidoMaterno.trim().length < 2) {
+      alert("⚠️ El apellido materno debe tener al menos 2 caracteres o dejarlo vacío");
+      return;
+    }
+
     if (!formData.area || !formData.area.trim()) {
-      alert("⚠️ Por favor ingresa el área a visitar (ej: Rectoría, Sistemas, Biblioteca)");
+      alert("⚠️ Por favor selecciona el área a visitar");
       return;
     }
 
-    // Validación de INE: 10 dígitos exactos
-    if (formData.ine && formData.ine.length !== 10) {
-      alert("⚠️ El INE debe tener exactamente 10 dígitos numéricos");
+    // Validación de INE: 10 dígitos exactos (obligatorio)
+    if (!formData.ine || formData.ine.length !== 10) {
+      alert("⚠️ El INE es obligatorio y debe tener exactamente 10 dígitos numéricos");
       return;
     }
 
-    // Validación de celular: 10 dígitos exactos
-    if (formData.celular && formData.celular.length !== 10) {
-      alert("⚠️ El número de celular debe tener exactamente 10 dígitos");
+    // Validación de celular: 10 dígitos exactos (obligatorio)
+    if (!formData.celular || formData.celular.length !== 10) {
+      alert("⚠️ El número de celular es obligatorio y debe tener exactamente 10 dígitos");
       return;
     }
 
-    // Validar correo electrónico
-    if (formData.correo && formData.correo.trim()) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(formData.correo)) {
-        alert("⚠️ Por favor ingresa un correo electrónico válido");
+    // Validar correo electrónico (obligatorio)
+    if (!formData.correo || !formData.correo.trim()) {
+      alert("⚠️ El correo electrónico es obligatorio");
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.correo)) {
+      alert("⚠️ Por favor ingresa un correo electrónico válido");
+      return;
+    }
+    
+    // Validar que el dominio del correo tenga al menos 2 caracteres después del punto
+    const dominioPartes = formData.correo.split('@')[1]?.split('.');
+    if (!dominioPartes || dominioPartes[dominioPartes.length - 1].length < 2) {
+      alert("⚠️ El dominio del correo electrónico no es válido");
+      return;
+    }
+
+    // Validar fecha de nacimiento (si se proporciona, no puede ser actual o futura)
+    if (formData.fechaNacimiento) {
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+      const fechaNac = new Date(formData.fechaNacimiento);
+      fechaNac.setHours(0, 0, 0, 0);
+      
+      if (fechaNac >= hoy) {
+        alert("⚠️ La fecha de nacimiento no puede ser hoy o una fecha futura");
+        return;
+      }
+      
+      // Validar que la persona tenga al menos 1 año (evitar errores)
+      const unAnoAtras = new Date();
+      unAnoAtras.setFullYear(unAnoAtras.getFullYear() - 1);
+      if (fechaNac > unAnoAtras) {
+        alert("⚠️ La fecha de nacimiento indica que la persona es menor de 1 año. Por favor verifica la fecha");
+        return;
+      }
+      
+      // Validar que la fecha no sea demasiado antigua (mayor a 120 años)
+      const cientoVeinteAnosAtras = new Date();
+      cientoVeinteAnosAtras.setFullYear(cientoVeinteAnosAtras.getFullYear() - 120);
+      if (fechaNac < cientoVeinteAnosAtras) {
+        alert("⚠️ La fecha de nacimiento no es válida. Por favor verifica la fecha");
+        return;
+      }
+    }
+    
+    // Validar persona a visitar si se proporciona
+    if (formData.personaVisitar && formData.personaVisitar.trim().length > 0) {
+      if (formData.personaVisitar.trim().length < 3) {
+        alert("⚠️ El nombre de la persona a visitar debe tener al menos 3 caracteres");
+        return;
+      }
+      
+      // Validar que tenga al menos un espacio (nombre y apellido)
+      if (!formData.personaVisitar.trim().includes(' ')) {
+        alert("⚠️ Por favor ingresa el nombre completo de la persona a visitar (nombre y apellido)");
         return;
       }
     }
@@ -100,15 +267,70 @@ export default function Agregar({ visitantes, setVisitantes }) {
         alert("⚠️ Las placas deben tener entre 5 y 12 caracteres");
         return;
       }
+      
+      // Validar que las placas tengan al menos una letra y un número
+      const tieneLetra = /[A-Z]/.test(formData.placas);
+      const tieneNumero = /[0-9]/.test(formData.placas);
+      if (!tieneLetra || !tieneNumero) {
+        alert("⚠️ Las placas deben contener al menos una letra y un número");
+        return;
+      }
     }
 
-    // Validar fecha no sea pasada
+    // Validar fecha de cita (puede ser hoy o en el futuro, pero no en el pasado)
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
-    const fechaSeleccionada = new Date(formData.fechaCita);
+    const fechaSeleccionada = new Date(formData.fechaCita + 'T00:00:00');
+    fechaSeleccionada.setHours(0, 0, 0, 0);
+    
     if (fechaSeleccionada < hoy) {
       alert("⚠️ La fecha de la cita no puede ser anterior a hoy");
       return;
+    }
+
+    // Validar que no sea domingo
+    const diaSemana = fechaSeleccionada.getDay(); // 0 = Domingo, 1 = Lunes, ..., 6 = Sábado
+    if (diaSemana === 0) {
+      alert("⚠️ No se pueden agendar citas los domingos.\n\nHorario de atención:\n• Lunes a Viernes: 7:00 AM - 7:00 PM\n• Sábados: 7:00 AM - 2:00 PM");
+      return;
+    }
+
+    // Validar hora de la cita según el día
+    const [horasCita, minutosCita] = formData.horaCita.split(':').map(Number);
+    const minutosCitaTotal = horasCita * 60 + minutosCita;
+
+    // Validación de horarios laborales según el día
+    if (diaSemana >= 1 && diaSemana <= 5) {
+      // Lunes a Viernes: 7:00 AM - 7:00 PM (07:00 - 19:00)
+      if (horasCita < 7 || horasCita >= 19) {
+        alert("⚠️ Horario no disponible.\n\nLunes a Viernes:\n• Horario de atención: 7:00 AM - 7:00 PM\n\nPor favor selecciona una hora entre las 7:00 AM y las 7:00 PM");
+        return;
+      }
+    } else if (diaSemana === 6) {
+      // Sábado: 7:00 AM - 2:00 PM (07:00 - 14:00)
+      if (horasCita < 7 || horasCita >= 14) {
+        alert("⚠️ Horario no disponible para sábado.\n\nSábados:\n• Horario de atención: 7:00 AM - 2:00 PM\n\nPor favor selecciona una hora entre las 7:00 AM y las 2:00 PM");
+        return;
+      }
+    }
+
+    // Validar hora de la cita si es para hoy
+    if (fechaSeleccionada.getTime() === hoy.getTime()) {
+      const ahora = new Date();
+      const horaActual = ahora.getHours();
+      const minutoActual = ahora.getMinutes();
+      const minutosActualTotal = horaActual * 60 + minutoActual;
+      
+      if (minutosCitaTotal <= minutosActualTotal) {
+        alert(`⚠️ La hora de la cita no puede ser anterior o igual a la hora actual.\nHora actual: ${horaActual}:${minutoActual.toString().padStart(2, '0')}`);
+        return;
+      }
+      
+      // Validar que haya al menos 30 minutos de anticipación
+      if (minutosCitaTotal < minutosActualTotal + 30) {
+        alert("⚠️ Por favor agenda la cita con al menos 30 minutos de anticipación desde ahora");
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -177,7 +399,7 @@ export default function Agregar({ visitantes, setVisitantes }) {
         ine: "",
         correo: "",
         celular: "",
-        fechaCita: "",
+        fechaCita: getFechaHoy(),  // Volver a poner fecha de hoy
         horaCita: "",
         personaVisitar: "",
         area: "",
@@ -187,6 +409,7 @@ export default function Agregar({ visitantes, setVisitantes }) {
         color: "",
         placas: "",
       });
+      setVisitaPersonaEspecifica(false);
     } catch (error) {
       console.error("❌ Error al registrar la cita:", error);
       
@@ -305,8 +528,11 @@ export default function Agregar({ visitantes, setVisitantes }) {
                 name="fechaNacimiento"
                 value={formData.fechaNacimiento}
                 onChange={handleChange}
+                max={new Date().toISOString().split('T')[0]}
                 className="border rounded-md px-3 py-2 w-full focus:ring-[#1a237e] focus:border-[#1a237e]"
+                title="La fecha de nacimiento no puede ser hoy o una fecha futura"
               />
+              <p className="text-xs text-gray-500 mt-1">Debe ser una fecha pasada</p>
             </div>
 
             <input
@@ -324,21 +550,23 @@ export default function Agregar({ visitantes, setVisitantes }) {
             <input
               type="email"
               name="correo"
-              placeholder="Correo electrónico"
+              placeholder="Correo electrónico *"
               value={formData.correo}
               onChange={handleChange}
               className="border rounded-md px-3 py-2 w-full focus:ring-[#1a237e] focus:border-[#1a237e]"
+              required
             />
 
             <input
               type="tel"
               name="celular"
-              placeholder="Celular (10 dígitos)"
+              placeholder="Celular (10 dígitos) *"
               value={formData.celular}
               onChange={handleChange}
               maxLength={10}
               pattern="\d{10}"
               className="border rounded-md px-3 py-2 w-full focus:ring-[#1a237e] focus:border-[#1a237e]"
+              required
             />
           </div>
         </section>
@@ -348,6 +576,17 @@ export default function Agregar({ visitantes, setVisitantes }) {
           <h2 className="text-xl text-gray-800 border-b pb-2 mb-4 font-[Mitr]">
             Datos de la cita
           </h2>
+          
+          {/* Información de horarios */}
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+            <p className="text-sm font-medium text-blue-900 mb-2">📅 Horario de atención:</p>
+            <div className="text-xs text-blue-800 space-y-1">
+              <p>• <span className="font-medium">Lunes a Viernes:</span> 7:00 AM - 7:00 PM</p>
+              <p>• <span className="font-medium">Sábados:</span> 7:00 AM - 2:00 PM</p>
+              <p>• <span className="font-medium text-red-600">Domingos:</span> Cerrado</p>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm text-gray-600 mb-1">
@@ -358,9 +597,11 @@ export default function Agregar({ visitantes, setVisitantes }) {
                 name="fechaCita"
                 value={formData.fechaCita}
                 onChange={handleChange}
+                min={getFechaHoy()}
                 className="border rounded-md px-3 py-2 w-full focus:ring-[#1a237e] focus:border-[#1a237e]"
                 required
               />
+              <p className="text-xs text-gray-500 mt-1">Por defecto es hoy, pero puedes cambiarla</p>
             </div>
 
             <div>
@@ -374,38 +615,109 @@ export default function Agregar({ visitantes, setVisitantes }) {
                 onChange={handleChange}
                 className="border rounded-md px-3 py-2 w-full focus:ring-[#1a237e] focus:border-[#1a237e]"
                 required
+                disabled={formData.fechaCita && new Date(formData.fechaCita + 'T00:00:00').getDay() === 0}
               />
+              <p className={`text-xs mt-1 font-medium ${
+                formData.fechaCita && new Date(formData.fechaCita + 'T00:00:00').getDay() === 0 
+                  ? 'text-red-600' 
+                  : esFechaHoy(formData.fechaCita) 
+                    ? 'text-orange-600' 
+                    : 'text-blue-600'
+              }`}>
+                {getMensajeHora()}
+              </p>
+            </div>
+
+            <div className="col-span-2">
+              <label className="block text-sm text-gray-600 mb-1">
+                Área a visitar <span className="text-red-500">*</span>
+              </label>
+              <select
+                name="area"
+                value={formData.area}
+                onChange={handleChange}
+                className="border rounded-md px-3 py-2 w-full focus:ring-[#1a237e] focus:border-[#1a237e]"
+                required
+              >
+                <option value="">Selecciona el área a visitar</option>
+                
+                <optgroup label="📚 Áreas Académicas">
+                  <option value="Arquitectura y Diseño">Arquitectura y Diseño</option>
+                  <option value="Ciencias Sociales y Humanidades">Ciencias Sociales y Humanidades</option>
+                  <option value="Negocios y Economía">Negocios y Economía</option>
+                  <option value="Ciencias de la Salud">Ciencias de la Salud</option>
+                  <option value="Turismo y Gastronomía">Turismo y Gastronomía</option>
+                  <option value="Ingenierías">Ingenierías</option>
+                </optgroup>
+                
+                <optgroup label="🏗️ Instalaciones Académicas">
+                  <option value="Laboratorios">Laboratorios</option>
+                  <option value="Talleres">Talleres</option>
+                  <option value="Biblioteca">Biblioteca</option>
+                </optgroup>
+                
+                <optgroup label="👩🏻‍💼 Servicios Administrativos">
+                  <option value="Rectoría">Rectoría</option>
+                  <option value="Control Escolar">Control Escolar</option>
+                  <option value="Servicios Escolares">Servicios Escolares</option>
+                  <option value="Admisiones">Admisiones</option>
+                  <option value="Caja / Pagos">Caja / Pagos</option>
+                </optgroup>
+                
+                <optgroup label="⚽️ Servicios Generales">
+                  <option value="Cafetería">Cafetería</option>
+                  <option value="Instalaciones Deportivas">Instalaciones Deportivas</option>
+                  <option value="Áreas Comunes">Áreas Comunes</option>
+                </optgroup>
+                
+                <optgroup label="➕ Otro">
+                  <option value="Otra área">Otra área</option>
+                </optgroup>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                <span className="font-medium text-gray-700">Área obligatoria:</span> Selecciona el destino principal de la visita
+              </p>
             </div>
 
             <div className="col-span-2 bg-blue-50 p-4 rounded-md border border-blue-200">
-              <p className="text-sm text-blue-800 font-medium mb-2">
-                Persona a visitar (Opcional)
-              </p>
-              <p className="text-xs text-blue-600 mb-3">
-                Ingresa el nombre completo de la persona a visitar. Si solo deseas visitar un área, deja este campo vacío.
-              </p>
-              <div className="grid grid-cols-1 gap-3">
+              <label className="flex items-center space-x-2 mb-3">
                 <input
-                  type="text"
-                  name="personaVisitar"
-                  placeholder="Nombre completo de la persona a visitar (ej: María González Ruiz)"
-                  value={formData.personaVisitar}
-                  onChange={handleChange}
-                  className="border rounded-md px-3 py-2 w-full focus:ring-[#1a237e] focus:border-[#1a237e]"
+                  type="checkbox"
+                  checked={visitaPersonaEspecifica}
+                  onChange={(e) => {
+                    setVisitaPersonaEspecifica(e.target.checked);
+                    if (!e.target.checked) {
+                      setFormData({ ...formData, personaVisitar: "" });
+                    }
+                  }}
+                  className="w-4 h-4 text-[#1a237e] focus:ring-[#1a237e]"
                 />
-              </div>
-              <div className="mt-3">
-                <input
-                  type="text"
-                  name="area"
-                  placeholder="Área a visitar (ej: Rectoría, Sistemas, Biblioteca) *"
-                  value={formData.area}
-                  onChange={handleChange}
-                  className="border rounded-md px-3 py-2 w-full focus:ring-[#1a237e] focus:border-[#1a237e]"
-                  required
-                />
-                <p className="text-xs text-gray-500 mt-1">El área es obligatoria y representa el destino principal de la visita</p>
-              </div>
+                <span className="text-sm font-medium text-blue-800">
+                  ¿Deseas visitar a una persona específica? (Opcional)
+                </span>
+              </label>
+              
+              {visitaPersonaEspecifica && (
+                <div>
+                  <p className="text-xs text-blue-600 mb-3">
+                    Ingresa el nombre completo de la persona a visitar en el área seleccionada.
+                  </p>
+                  <input
+                    type="text"
+                    name="personaVisitar"
+                    placeholder="Nombre completo de la persona a visitar (ej: María González Ruiz)"
+                    value={formData.personaVisitar}
+                    onChange={handleChange}
+                    className="border rounded-md px-3 py-2 w-full focus:ring-[#1a237e] focus:border-[#1a237e]"
+                  />
+                </div>
+              )}
+              
+              {!visitaPersonaEspecifica && (
+                <p className="text-xs text-blue-600">
+                  Si solo visitas un área sin persona específica, deja esta opción sin marcar.
+                </p>
+              )}
             </div>
           </div>
         </section>

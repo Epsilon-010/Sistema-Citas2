@@ -45,7 +45,7 @@ export default function Navbar() {
   if (rol === "admin_sistema") {
     extraMenu = [
       {
-        name: "Administrar Usuarios",
+        name: "Agregar Usuarios",
         icon: <UserGroupIcon className="w-5 h-5 font-[Mitr]" />,
         path: "/admin",
       },
