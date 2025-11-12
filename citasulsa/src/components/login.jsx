@@ -2,6 +2,7 @@ import { UserIcon, LockClosedIcon } from "@heroicons/react/24/outline";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { authAPI } from "../services/api";
+import { Link } from "react-router-dom";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -134,6 +135,12 @@ export default function Login() {
             >
               {loading ? "Ingresando..." : "LOGIN"}
             </button>
+            <p className="text-sm mt-6 text-center">
+                ¿Olvidaste tu contraseña?{" "}
+              <Link to="/restablecer" className="text-yellow-300 hover:underline">Restablecer</Link>
+            </p>
+
+
           </form>
         </div>
       </div>
